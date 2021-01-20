@@ -51,6 +51,8 @@ def _cosine_distance(a, b, data_is_normalized=False):
     if not data_is_normalized:
         a = np.asarray(a) / np.linalg.norm(a, axis=1, keepdims=True)
         b = np.asarray(b) / np.linalg.norm(b, axis=1, keepdims=True)
+        #print(a.shape)
+        #print(b.shape)
     return 1. - np.dot(a, b.T)
 
 
@@ -134,7 +136,7 @@ class NearestNeighborDistanceMetric(object):
         self.budget = budget
         self.samples = {}
 
-    def partial_fit(self, features, targets, active_targets):
+    def partial_fit(self, features, targets, active_targets, valid_track):
         """Update the distance metric with new data.
 
         Parameters
@@ -145,13 +147,33 @@ class NearestNeighborDistanceMetric(object):
             An integer array of associated target identities.
         active_targets : List[int]
             A list of targets that are currently present in the scene.
+        buffer_size: int
+            Number of initial features to keep as base features to compare with
 
         """
-        for feature, target in zip(features, targets):
-            self.samples.setdefault(target, []).append(feature)
-            if self.budget is not None:
-                self.samples[target] = self.samples[target][-self.budget:]
-        self.samples = {k: self.samples[k] for k in active_targets}
+        if not valid_track:
+            for feature, target in zip(features, targets):
+                self.samples.setdefault(target, []).append(feature)
+                if self.budget is not None:
+                    #if len(self.samples[target]) > self.budget and target in teacher_candidate_ids:
+                    #    retain = self.samples[target][:buffer_size]
+                    #    excess = len(self.samples[target]) - self.budget
+                    #    last = self.samples[target][buffer_size+excess:]
+                    #    retain.extend(last)
+                    #    self.samples[target] = retain
+                        #print("{}: {}".format(target, len(self.samples[target])))
+                    #else:
+                    #    self.samples[target] = self.samples[target][-self.budget:]
+                    self.samples[target] = self.samples[target][-self.budget:]
+        # Only track active targets and teachers
+        active_features = {k: self.samples[k] for k in active_targets}
+
+        #if teacher_candidate_ids is not None:
+        #    teacher_features = {k: self.samples[k] for k in teacher_candidate_ids}
+        #    self.samples = {**active_features, **teacher_features}
+        #else:
+        #    self.samples = active_features
+        self.samples = active_features
 
     def distance(self, features, targets):
         """Compute distance between features and targets.

@@ -5,8 +5,9 @@ import argparse
 import numpy as np
 import cv2
 import tensorflow as tf
+from torchreid.utils import FeatureExtractor
 
-
+"""
 def _run_in_batches(f, data_dict, out, batch_size):
     data_len = len(out)
     num_batches = int(data_len / batch_size)
@@ -19,6 +20,25 @@ def _run_in_batches(f, data_dict, out, batch_size):
     if e < len(out):
         batch_data_dict = {k: v[e:] for k, v in data_dict.items()}
         out[e:] = f(batch_data_dict)
+"""
+
+def _run_in_batches(f, data_dict, batch_size):
+    data_len = len(data_dict)
+    num_batches = int(data_len / batch_size)
+    out = []
+    s, e = 0, 0
+    for i in range(num_batches):
+        s, e = i * batch_size, (i + 1) * batch_size
+        batch_data_dict = data_dict[s:e]
+        features = f(batch_data_dict).cpu()
+        out.append(features)
+    if e < data_len:
+        batch_data_dict = data_dict[e:]
+        features = f(batch_data_dict).cpu()
+        out.append(features)
+
+    out = np.concatenate(out, axis=0)
+    return out
 
 
 def extract_image_patch(image, bbox, patch_shape):
@@ -49,8 +69,8 @@ def extract_image_patch(image, bbox, patch_shape):
     if patch_shape is not None:
         # correct aspect ratio to patch shape
         target_aspect = float(patch_shape[1]) / patch_shape[0]
-        new_width = target_aspect * bbox[3]
-        bbox[0] -= (new_width - bbox[2]) / 2
+        new_width = target_aspect * bbox[3] # new width is proportionate to height
+        bbox[0] -= (new_width - bbox[2]) / 2 # adjust x
         bbox[2] = new_width
 
     # convert to top left, bottom right
@@ -67,7 +87,7 @@ def extract_image_patch(image, bbox, patch_shape):
     image = cv2.resize(image, tuple(patch_shape[::-1]))
     return image
 
-
+"""
 class ImageEncoder(object):
 
     def __init__(self, checkpoint_filename, input_name="images",
@@ -86,6 +106,8 @@ class ImageEncoder(object):
         assert len(self.input_var.get_shape()) == 4
         self.feature_dim = self.output_var.get_shape().as_list()[-1]
         self.image_shape = self.input_var.get_shape().as_list()[1:]
+        print("Image shape: {}".format(self.image_shape))
+        print("feature_dim: {}".format(self.feature_dim) )
 
     def __call__(self, data_x, batch_size=32):
         out = np.zeros((len(data_x), self.feature_dim), np.float32)
@@ -113,7 +135,70 @@ def create_box_encoder(model_filename, input_name="images",
         return image_encoder(image_patches, batch_size)
 
     return encoder
+"""
 
+def create_box_encoder(model_name, model_path, device="cuda", batch_size=32):
+    image_shape = (256, 128, 3)
+    image_encoder = ImageEncoder(model_name=model_name, model_path=model_path, device=device)
+    #image_shape = image_encoder.input_shape
+
+    def encoder(image, boxes):
+        image_patches = []
+        for box in boxes:
+            patch = extract_image_patch(image, box, image_shape[:2])
+            if patch is None:
+                print("WARNING: Failed to extract image patch: %s." % str(box))
+                patch = np.random.uniform(
+                    0., 255., image_shape).astype(np.uint8)
+            image_patches.append(patch)
+        #image_patches = np.asarray(image_patches)
+
+        return image_encoder(image_patches, batch_size)
+
+    return encoder
+
+class ImageEncoder(object):
+    def __init__(self, model_name, model_path, device="cuda"):
+        self.model_name = model_name
+        self.model_path = model_path
+        self.device = device
+        self._set_extractor()
+        self.feature_dim = 512 # From osnet doc
+        #self.input_shape = self.model.get_layer(index=0).input_shape
+        #self.input_shape = input_shape
+        #self.output_shape = self.model.get_layer(index=len(self.model.layers)-1).output_shape
+        #print("Input Shape: {}".format(self.input_shape))
+        #print("Output Shape: {}".format(self.output_shape))
+
+    def __call__(self, data_x, batch_size=32):
+        out = _run_in_batches(f=self.extractor,
+                              data_dict=data_x,
+                              batch_size=batch_size)
+        return out
+        #print("Image shape: {}".format(data_x.shape))
+        #data_x = self.preprocessor(data_x)
+        #out = self.model.predict(data_x, batch_size=batch_size)
+        #print("Before reshape: {}".format(out.shape))
+        #out = np.transpose(out, (3,2,1,0))
+        #print("After transpose: {}".format(out.shape))
+        #out = np.reshape(out, (out.shape[0], -1))
+        #print("After reshape: {}".format(out.shape))
+
+        #return out
+        
+    #def _set_model(self):
+    #    if self.model_name == "VGG16":
+    #        self.model = A.VGG16(weights="imagenet", include_top=False)#, input_shape=self.input_shape)
+    #    elif self.model_name == "ResNet50":
+    #        self.model = A.ResNet50(weights="imagenet", include_top=False)#, input_shape=self.input_shape)
+    #    elif self.model_name == "Xception":
+    #        self.model = A.Xception(weights="imagenet", include_top=False)#, input_shape=self.input_shape)
+    #        self.preprocessor = A.xception.preprocess_input
+
+    def _set_extractor(self):
+        self.extractor = FeatureExtractor(model_name=self.model_name,
+                                          model_path=self.model_path,
+                                          device=self.device)
 
 def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
     """Generate detections with features.

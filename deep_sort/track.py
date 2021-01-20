@@ -64,7 +64,7 @@ class Track:
     """
 
     def __init__(self, mean, covariance, track_id, n_init, max_age,
-                 feature=None, detection_conf=1.0):
+                 feature=None, detection_conf=1.0, is_teacher=False):
         self.mean = mean
         self.covariance = covariance
         self.track_id = track_id
@@ -82,6 +82,11 @@ class Track:
         
         self.last_detection_confidence = detection_conf
 
+        self.is_teacher = is_teacher
+
+    def __call__(self):
+        print("ID: {}".format(self.track_id))
+        
     def to_tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
         width, height)`.
@@ -150,11 +155,13 @@ class Track:
 
     def mark_missed(self):
         """Mark this track as missed (no association at the current time step).
+           Only mark as missed for non-teacher items.
         """
-        if self.state == TrackState.Tentative:
-            self.state = TrackState.Deleted
-        elif self.time_since_update > self._max_age:
-            self.state = TrackState.Deleted
+        if not self.is_teacher:
+            if self.state == TrackState.Tentative:
+                self.state = TrackState.Deleted
+            elif self.time_since_update > self._max_age:
+                self.state = TrackState.Deleted
 
     def is_tentative(self):
         """Returns True if this track is tentative (unconfirmed).
@@ -168,3 +175,6 @@ class Track:
     def is_deleted(self):
         """Returns True if this track is dead and should be deleted."""
         return self.state == TrackState.Deleted
+
+    def set_teacher(self):
+        self.is_teacher = True

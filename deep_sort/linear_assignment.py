@@ -54,7 +54,10 @@ def min_cost_matching(
 
     cost_matrix = distance_metric(
         tracks, detections, track_indices, detection_indices)
+    # Caps max distance to be max_distance + 1e-5
     cost_matrix[cost_matrix > max_distance] = max_distance + 1e-5
+    # Assigns detections to existing tracks (Hungarian algorithm)
+    #print(cost_matrix)
     indices = linear_assignment(cost_matrix)
 
     matches, unmatched_tracks, unmatched_detections = [], [], []
@@ -64,6 +67,7 @@ def min_cost_matching(
     for row, track_idx in enumerate(track_indices):
         if row not in indices[:, 0]:
             unmatched_tracks.append(track_idx)
+
     for row, col in indices:
         track_idx = track_indices[row]
         detection_idx = detection_indices[col]
@@ -125,6 +129,7 @@ def matching_cascade(
         if len(unmatched_detections) == 0:  # No detections left
             break
 
+        # Checks the tracks that were updated X time frames ago
         track_indices_l = [
             k for k in track_indices
             if tracks[k].time_since_update == 1 + level
@@ -132,6 +137,9 @@ def matching_cascade(
         if len(track_indices_l) == 0:  # Nothing to match at this level
             continue
 
+        #min_cost_matching(distance_metric, max_distance, tracks, 
+                           #detections, track_indices=None,
+                           #detection_indices=None)
         matches_l, _, unmatched_detections = \
             min_cost_matching(
                 distance_metric, max_distance, tracks, detections,

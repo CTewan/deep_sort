@@ -70,7 +70,10 @@ def iou_cost(tracks, detections, track_indices=None,
         detection_indices = np.arange(len(detections))
 
     cost_matrix = np.zeros((len(track_indices), len(detection_indices)))
+
+    # For each existing track, calculates cost matrix to detected bounding boxes
     for row, track_idx in enumerate(track_indices):
+        # If track was not present in previous frame, set it to infinite distance from all detections
         if tracks[track_idx].time_since_update > 1:
             cost_matrix[row, :] = linear_assignment.INFTY_COST
             continue
