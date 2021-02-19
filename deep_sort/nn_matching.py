@@ -135,8 +135,9 @@ class NearestNeighborDistanceMetric(object):
         self.matching_threshold = matching_threshold
         self.budget = budget
         self.samples = {}
+        self.stored_features = {}
 
-    def partial_fit(self, features, targets, active_targets, valid_track):
+    def partial_fit(self, features, targets, active_targets, valid_track, store_features=False):
         """Update the distance metric with new data.
 
         Parameters
@@ -151,28 +152,23 @@ class NearestNeighborDistanceMetric(object):
             Number of initial features to keep as base features to compare with
 
         """
+        if store_features:
+            for feature, target in zip(features, targets):
+                self.stored_features.setdefault(target, []).append(feature)
+
         if not valid_track:
             for feature, target in zip(features, targets):
                 self.samples.setdefault(target, []).append(feature)
                 if self.budget is not None:
-                    #if len(self.samples[target]) > self.budget and target in teacher_candidate_ids:
-                    #    retain = self.samples[target][:buffer_size]
-                    #    excess = len(self.samples[target]) - self.budget
-                    #    last = self.samples[target][buffer_size+excess:]
-                    #    retain.extend(last)
-                    #    self.samples[target] = retain
-                        #print("{}: {}".format(target, len(self.samples[target])))
-                    #else:
-                    #    self.samples[target] = self.samples[target][-self.budget:]
                     self.samples[target] = self.samples[target][-self.budget:]
-        # Only track active targets and teachers
-        active_features = {k: self.samples[k] for k in active_targets}
+            # Only track active targets and teachers
+            active_features = {k: self.samples[k] for k in active_targets}
 
-        #if teacher_candidate_ids is not None:
-        #    teacher_features = {k: self.samples[k] for k in teacher_candidate_ids}
-        #    self.samples = {**active_features, **teacher_features}
-        #else:
-        #    self.samples = active_features
+        else:
+            # Only track teachers
+            active_features = {k: self.stored_features[k] for k in active_targets}
+
+
         self.samples = active_features
 
     def distance(self, features, targets):

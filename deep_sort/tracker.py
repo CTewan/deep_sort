@@ -49,6 +49,9 @@ class Tracker:
         # Tewan
         self.teacher_candidate_ids = []
         self.valid_track = False
+        self._features = None
+        self._targets = None
+        self._active_targets = None
         # Tewan
 
     def predict(self):
@@ -59,6 +62,11 @@ class Tracker:
         for track in self.tracks:
             track.predict(self.kf)
 
+    def store_features(self):
+        self.metric.partial_fit(
+            self._features, self._targets, self._active_targets, 
+            self.valid_track, store_features=True)
+        
     def update(self, detections):
         """Perform measurement update and track management.
 
@@ -99,13 +107,24 @@ class Tracker:
             track.features = []
         # Tewan: Added all possible teacher ID candidate to active_targets to keep them in nn.samples
         #active_targets.extend(self.teacher_candidate_ids)
+        self._features = np.asarray(features)
+        self._targets = np.asarray(targets)
+        self._active_targets = active_targets
+
         self.metric.partial_fit(
-            np.asarray(features), np.asarray(targets), active_targets, 
+            self._features, self._targets, self._active_targets, 
             self.valid_track)
         # Tewan
         #self.metric.partial_fit(
         #    np.asarray(features), np.asarray(targets), active_targets)
 
+    def get_fixed_features(self):
+        feature_size = {}
+        for track, feature in self.metric.samples.items():
+            feature_size[track] = len(feature)
+
+        return feature_size
+        
     # Tewan
     def update_teacher_candidate_ids(self, teacher_candidate_id):
         if teacher_candidate_id not in self.teacher_candidate_ids:
@@ -148,6 +167,9 @@ class Tracker:
         else:
             confirmed_tracks = [
                 i for i, t in enumerate(self.tracks) if t.is_teacher]
+
+            #unconfirmed_tracks = [
+            #    i for i, t in enumerate(self.tracks) if not t.is_teacher]
 
         # Associate confirmed tracks using appearance features.
         # matching_cascade(distance_metric, max_distance, 

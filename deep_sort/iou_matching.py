@@ -36,7 +36,10 @@ def iou(bbox, candidates):
     area_intersection = wh.prod(axis=1)
     area_bbox = bbox[2:].prod()
     area_candidates = candidates[:, 2:].prod(axis=1)
-    return area_intersection / (area_bbox + area_candidates - area_intersection)
+
+    denominator = area_bbox + area_candidates - area_intersection
+    denominator = np.where(denominator == 0, linear_assignment.INFTY_COST, denominator)
+    return area_intersection / denominator
 
 
 def iou_cost(tracks, detections, track_indices=None,
